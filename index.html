@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64 Barcode Scanner</title>
+    <!-- Memanggil library scanner dari CDN -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        h2 { margin-top: 0; color: #333; }
+        #reader { width: 100%; margin-bottom: 20px; }
+        #result-box {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+            word-wrap: break-word;
+            display: none;
+        }
+        .btn-restart {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+        }
+        .btn-restart:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Scanner Base64</h2>
+    <p style="font-size: 14px; color: #666;">Arahkan kamera ke QR Code/Barcode. Sistem akan men-decode Base64 hingga 5x otomatis.</p>
+    
+    <!-- Area Scanner -->
+    <div id="reader"></div>
+    
+    <!-- Area Hasil -->
+    <div id="result-box"></div>
+    <button class="btn-restart" id="btn-restart" onclick="location.reload()">Scan Ulang</button>
+</div>
+
+<script>
+    // Fungsi untuk men-decode Base64 secara aman dengan format UTF-8
+    function decodeBase64UTF8(str) {
+        const binary = atob(str);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new TextDecoder('utf-8').decode(bytes);
+    }
+
+    // Logika utama untuk memproses teks dari barcode
+    function processBarcodeData(scannedData) {
+        let currentText = scannedData;
+        let successLink = null;
+        let decodeCount = 0;
+
+        // Lakukan loop decode maksimal 5x berurutan
+        for (let i = 1; i <= 5; i++) {
+            try {
+                currentText = decodeBase64UTF8(currentText);
+                decodeCount = i;
+                
+                // Cek apakah hasilnya sudah berupa link HTTP/HTTPS
+                if (currentText.startsWith("https://") || currentText.startsWith("http://")) {
+                    successLink = currentText;
+                    break;
+                }
+            } catch (e) {
+                // Jika gagal di-decode (karena sudah bukan Base64), hentikan loop
+                break;
+            }
+        }
+
+        const resultBox = document.getElementById('result-box');
+        resultBox.style.display = 'block';
+        document.getElementById('btn-restart').style.display = 'inline-block';
+
+        if (successLink) {
+            resultBox.innerHTML = `
+                <strong style="color: green;">Link Ditemukan!</strong><br>
+                <small>Berhasil di-decode sebanyak ${decodeCount}x</small><br><br>
+                <a href="${successLink}" target="_blank">${successLink}</a><br><br>
+                <i>Mengarahkan otomatis dalam 3 detik...</i>
+            `;
+            // Redirect otomatis ke link
+            setTimeout(() => {
+                window.location.href = successLink;
+            }, 3000);
+        } else {
+            resultBox.innerHTML = `
+                <strong style="color: red;">Hasil Decode Terakhir:</strong><br><br>
+                ${currentText} <br><br>
+                <small><i>(Bukan link HTTPS yang valid)</i></small>
+            `;
+        }
+    }
+
+    // Konfigurasi Scanner Kamera
+    function onScanSuccess(decodedText, decodedResult) {
+        // Hentikan kamera setelah berhasil scan
+        html5QrcodeScanner.clear().then(() => {
+            processBarcodeData(decodedText);
+        }).catch(error => {
+            console.error("Gagal menghentikan scanner.", error);
+        });
+    }
+
+    // Inisialisasi Scanner
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: {width: 250, height: 250} },
+        /* verbose= */ false
+    );
+    html5QrcodeScanner.render(onScanSuccess);
+</script>
+
+</body>
+</html>
